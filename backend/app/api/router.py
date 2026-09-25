@@ -15,7 +15,7 @@ from app.schemas.schemas import (
     RailOut,
     StoreOut,
 )
-from app.services.overdue_hold import mark_ready_overdue, release_hung_not_yet_due, release_hung_overdue
+from app.services.overdue_hold import mark_ready_overdue, release_hung_overdue
 from app.services.rail_engine import Segment, first_fit
 
 api_router = APIRouter()
@@ -128,14 +128,13 @@ def pickup(body: PickupRequest, db: Session = Depends(get_db)):
 def overdue_scan(db: Session = Depends(get_db)):
     now = datetime.utcnow()
     marked = []
-    # 已上杆且到期：标 overdue 的同时释放 active 占位，腾出杆位给其它衣
+    # 已上杆且到期：标 overdue 的同时释放 active 占位，腾出杆位给其它衣；
+    # 未到期的 hung 衣不动，占位继续保留
     hung = db.scalars(select(WorkOrder).where(WorkOrder.status == "hung")).all()
     for o in hung:
         if o.due_at < now:
             release_hung_overdue(db, o, now)
             marked.append(o)
-        else:
-            release_hung_not_yet_due(db, o, now)
     ready = db.scalars(select(WorkOrder).where(WorkOrder.status == "ready")).all()
     for o in ready:
         if o.due_at < now:
